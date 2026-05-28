@@ -10,6 +10,10 @@
 
 如果 `.hyperspec-state.yaml` 不存在或 `project_profile` 为空，执行项目分析器：
 
+**如果存在AGENTS.md文件并且文件内容不是空白：**
+读取AGENTS.md作为输入，确认技术栈（语言、框架、构建工具）,编译/测试命令,项目结构, 检测CI配置 等
+
+**如果AGENTS.md文件不存在或者AGENTS.md文件内容是空白：**
 1. **探测语言和框架**：扫描源码目录的文件扩展名 + 读取依赖配置文件
 2. **识别构建工具**：检测根目录的 `pom.xml`、`build.gradle`、`package.json`、`go.mod`、`Cargo.toml`、`pyproject.toml` 等
 3. **推导编译/测试命令**：根据构建工具映射（见 SKILL.md "构建命令映射"表）
@@ -25,23 +29,73 @@
 
 ### 2. 需求确认
 
-与用户交互确认需求。规则：
+**项目中没有实际代码**
 
-- 一次只问一个问题
-- 优先使用选择题
-- 关注：目的、约束、成功标准
-- 从用户描述中提取变更名（英文短横线格式，如 `add-user-auth`）
+  - 如果项目中没有实际的代码，调用原生 `grill-me` skill，与用户交互确认需求。
 
-**空白项目（greenfield）额外确认：**
-如果 Step 1 中检测到是空项目（project_profile 为空），在此步骤中一并确认技术栈（语言、框架、构建工具）。确认后补充 `project_profile` 并更新 `.hyperspec-state.yaml`。
+  **做法：**
+  1. 宣布："调用 grill-me 确认需求"
+  2. **空白项目（greenfield）额外确认：** 如果 Step 1 中检测到是空项目（project_profile 为空），在此步骤中一并确认技术栈（语言、框架、构建工具）。确认后补充 `project_profile` 并更新 `.hyperspec-state.yaml`。
+  3. **如果用户提供了需求链接（如 JIRA 任务、GitHub Issue）：**先用 web reader 或其他方式获取需求详情，将完整需求作为本次需求的输入。
+  4. 使用 Skill 工具调用 `grill-me`，args 格式：
+  ```
+    /grill-me <需求描述>
+  ```
+  **用途说明**：grill-me 的官方定位是「围绕已有 plan/design 追问」，但在 propose Step 2 中，我们将其用于**需求发现**——从模糊想法中提取技术选型、约束和验收标准。此时还没有 plan，grill-me 的追问机制正好帮助我们逐步明确需求。
+  5. 从用户描述中提取变更名（英文短横线格式，如 `add-user-auth`）
 
-**如果用户提供了需求链接（如 JIRA 任务、GitHub Issue）：**
-先用 web reader 或其他方式获取需求详情，将完整需求作为本次需求的输入。
+**项目有实际代码**
 
-**自主模式：**
-如果用户声明了自主执行意图（如「完全自主」「你决定」「不用确认」），跳过交互式需求确认，直接根据用户最初的需求描述进入 Step 3。空白项目自主模式下根据需求描述推断技术栈。
+  - 如果项目中有实际的代码，或者有CONTEXT.md文件存在。调用 `grill-with-docs` skill，与用户交互确认需求。
 
-需求确认完成后，更新 `.hyperspec-state.yaml`：`active_change: <变更名>`、`checkpoint: requirements-confirmed`。
+  **做法：**
+  1. 宣布："调用 grill-with-docs 确认需求"
+  2. **空白项目（greenfield）额外确认：** 如果 Step 1 中检测到是空项目（project_profile 为空），在此步骤中一并确认技术栈（语言、框架、构建工具）。确认后补充 `project_profile` 并更新 `.hyperspec-state.yaml`。
+  3. **如果用户提供了需求链接（如 JIRA 任务、GitHub Issue）：**先用 web reader 或其他方式获取需求详情，将完整需求作为本次需求的输入。
+  4. 使用 Skill 工具调用 `grill-with-docs`，args 格式：
+  ```
+    /grill-with-docs <需求描述>
+  ```
+  **用途说明**：grill-with-docs 在 grill-me 基础上增加了 domain awareness（读取 CONTEXT.md、挑战术语、创建 ADR）。用于需求发现时，这些功能同样有价值——已有项目通常有领域术语和文档，需求确认时应尊重已有定义。
+  5. 从用户描述中提取变更名（英文短横线格式，如 `add-user-auth`）
+
+**降级方案：** 如果 `grill-me` 或 `grill-with-docs` skill 不可用（Skill 工具返回 "Unknown skill"），手动执行等效操作：
+
+1. 与用户交互确认需求，规则：一次只问一个问题、优先使用选择题、关注目的/约束/成功标准
+2. 从用户描述中提取变更名（英文短横线格式，如 `add-user-auth`）
+3. **空白项目（greenfield）额外确认：** 如果 Step 1 中检测到是空项目（project_profile 为空），在此步骤中一并确认技术栈（语言、框架、构建工具）。确认后补充 `project_profile` 并更新 `.hyperspec-state.yaml`。
+4. **如果用户提供了需求链接（如 JIRA 任务、GitHub Issue）：** 先用 web reader 或其他方式获取需求详情，将完整需求作为本次需求的输入。
+5. **自主模式：** 如果用户声明了自主执行意图（如「完全自主」「你决定」「不用确认」），跳过交互式需求确认，直接根据用户最初的需求描述进入 Step 3。空白项目自主模式下根据需求描述推断技术栈。
+
+需求确认完成后，执行以下持久化操作：
+
+1. **写入需求摘要文件**：将 Step 2 中确认的所有需求决策（技术选型、约束、验收标准等）整理为结构化摘要，写入项目根目录的 `.hyperspec-requirements.md`。格式示例：
+
+```markdown
+# 需求摘要：<变更名>
+
+## 目标
+<一句话描述本次变更要做什么>
+
+## 决策记录
+- <决策项1>: <选择> — <原因>
+- <决策项2>: <选择> — <原因>
+...
+
+## 约束
+- <约束1>
+- <约束2>
+...
+
+## 验收标准
+- <标准1>
+- <标准2>
+...
+```
+
+2. 更新 `.hyperspec-state.yaml`：`active_change: <变更名>`、`checkpoint: requirements-persisted`。
+
+**为什么持久化**：grill-me 的对话上下文在后续步骤中可能丢失（特别是断点恢复或上下文压缩后）。写入文件确保 Step 3 和 Step 4 能获取完整需求，避免重复询问用户相同问题。
 
 ### 3. 调用 openspec-propose 生成规格文档
 
@@ -50,25 +104,29 @@
 **做法：**
 
 1. 宣布："调用 openspec-propose 生成规格文档"
-2. 使用 Skill 工具调用 `openspec-propose`，args 格式：
+2. **读取需求摘要**：读取 `.hyperspec-requirements.md`，获取完整的需求决策信息
+3. 使用 Skill 工具调用 `openspec-propose`，args 格式：
    ```
-   Change name: <变更名>. Description: [项目: {project_profile.languages} + {project_profile.frameworks}, 构建: {project_profile.build_tool}] <需求描述>
+   Change name: <变更名>. Description: [项目: {project_profile.languages} + {project_profile.frameworks}, 构建: {project_profile.build_tool}] <用户原始需求>. 需求决策摘要: <从 .hyperspec-requirements.md 提取的完整需求决策内容，包括所有技术选型、约束、验收标准>
    ```
-   将 project_profile 信息作为上下文前缀附加到描述中，让 openspec-propose 能生成贴合项目技术栈的规格文档。
-3. `openspec-propose` 会自动执行：
+   **关键**：`<需求决策摘要>` 必须包含 `.hyperspec-requirements.md` 的**全部内容**，不是简略总结。这是避免 openspec-propose 重复询问已确认问题的核心机制。
+4. 变更目录创建后，将 `.hyperspec-requirements.md` **移入** `openspec/changes/<变更名>/requirements.md`，使其成为正式 artifact。移动后删除项目根目录的 `.hyperspec-requirements.md`。
+5. `openspec-propose` 会自动执行：
    - `openspec new change "<name>"` — 创建变更目录
    - `openspec status --change "<name>" --json` — 获取 artifact build order
    - 循环 `openspec instructions <artifact>` — 按依赖顺序生成每个 artifact
    - 产出：proposal.md、design.md、specs/、tasks.md
-4. 等待 skill 完成后，验证 `openspec/changes/<变更名>/` 下所有 artifacts 已生成且**非空**（检查每个文件 size > 0）。如果某个 artifact 文件为空或不存在，重新调用 openspec-propose 补充缺失的 artifact。
-5. **覆盖 openspec-propose 的执行建议**：openspec-propose 完成后会建议 "Run /opsx:apply"。在 HyperSpec 上下文中忽略此建议，宣布 "回到 HyperSpec 流程，继续生成实现计划"
+6. 等待 skill 完成后，验证 `openspec/changes/<变更名>/` 下所有 artifacts 已生成且**非空**（包括 `requirements.md`）。如果某个 artifact 文件为空或不存在，重新调用 openspec-propose 补充缺失的 artifact。
+7. **覆盖 openspec-propose 的执行建议**：openspec-propose 完成后会建议 "Run /opsx:apply"。在 HyperSpec 上下文中忽略此建议，宣布 "回到 HyperSpec 流程，继续生成实现计划"
 
 **降级方案：** 如果 `openspec-propose` skill 不可用（Skill 工具返回 "Unknown skill"），手动执行等效操作：
-1. 运行 `npx @fission-ai/openspec new change "<变更名>"` 创建变更目录
-2. 运行 `npx @fission-ai/openspec status --change "<变更名>" --json` 获取 artifact build order
-3. 对每个 artifact，运行 `npx @fission-ai/openspec instructions <artifact>` 获取生成指令
-4. 按照指令内容，使用 Write 工具直接创建对应的 artifact 文件（proposal.md、design.md、specs/ 下的 .md 文件、tasks.md）
-5. 确保每个 artifact 文件非空且内容完整
+1. 读取 `.hyperspec-requirements.md` 获取完整需求摘要
+2. 运行 `bunx @fission-ai/openspec new change "<变更名>"` 创建变更目录（如果 bunx 失败，改用 `npx @fission-ai/openspec new change "<变更名>"`）
+3. 将 `.hyperspec-requirements.md` 移入 `openspec/changes/<变更名>/requirements.md`
+4. 运行 `bunx @fission-ai/openspec status --change "<变更名>" --json` 获取 artifact build order（如果 bunx 失败，改用 `npx @fission-ai/openspec status --change "<变更名>" --json`）
+5. 对每个 artifact，运行 `bunx @fission-ai/openspec instructions <artifact>` 获取生成指令（如果 bunx 失败，改用 `npx @fission-ai/openspec instructions <artifact>`）
+6. 按照指令内容，使用 Write 工具直接创建对应的 artifact 文件（proposal.md、design.md、specs/ 下的 .md 文件、tasks.md）——**生成时必须参考 requirements.md 中的需求决策，确保 artifacts 反映已确认的需求**
+7. 确保每个 artifact 文件非空且内容完整
 
 完成后更新 `.hyperspec-state.yaml`：`checkpoint: openspec-generated`。
 
@@ -80,6 +138,7 @@
 
 1. 宣布："调用 writing-plans 生成实现计划"
 2. **准备上下文**：读取以下文件并构造上下文字符串：
+   - `openspec/changes/<变更名>/requirements.md` — **需求决策摘要（来自 Step 2 grill-me 确认）**
    - `openspec/changes/<变更名>/proposal.md` — 需求背景和目标
    - `openspec/changes/<变更名>/design.md` — 技术方案
    - `openspec/changes/<变更名>/specs/` — 规格增量（所有 .md 文件）
@@ -149,13 +208,16 @@
 | checkpoint | 实际文件状态 | 恢复到 |
 |-----------|-------------|--------|
 | `profiler-done` | 无活跃变更目录 | Step 2（需求确认） |
-| `requirements-confirmed` | 变更目录不存在 | Step 3（调用 openspec-propose） |
-| `requirements-confirmed` | 变更目录存在但 artifacts 不完整或有空文件 | Step 3（openspec-propose 会自动补充） |
+| `requirements-confirmed` | `.hyperspec-requirements.md` 不存在 | Step 2（补充持久化需求摘要，然后进入 Step 3） |
+| `requirements-persisted` | 变更目录不存在 | Step 3（调用 openspec-propose） |
+| `requirements-persisted` | 变更目录存在但 artifacts 不完整或有空文件 | Step 3（openspec-propose 会自动补充） |
 | `openspec-generated` | artifacts 完整但 `superpowers/plans/` 无计划文件 | Step 4（调用 writing-plans） |
 | `plan-generated` | 计划文件存在但无 checkbox | Step 4（重新调用 writing-plans） |
 | `plan-generated` | 计划文件存在且有 checkbox | Step 5（用户确认） |
 | `plan-generated-and-confirmed` | 计划文件存在且有 checkbox | 出口到 apply 阶段（`phase: apply, checkpoint: plan-generated-and-confirmed`） |
 | `plan-generated-and-confirmed` | 计划文件不存在或无 checkbox | 回退到 Step 4（重新生成计划） |
+
+**旧版兼容**：如果状态文件 checkpoint 为 `requirements-confirmed` 且 `.hyperspec-requirements.md` 已存在，视为等价于 `requirements-persisted`。
 
 **状态文件缺失时的降级**：如果没有 `.hyperspec-state.yaml`，回退到文件扫描方式（按上述表格右列的实际文件状态判断）。
 
